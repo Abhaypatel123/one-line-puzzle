@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react';
-import { Alert, Animated, Dimensions, NativeModules, Pressable, SafeAreaView, StyleSheet, Text, useWindowDimensions, Vibration, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Animated, Dimensions, Modal, NativeModules, Pressable, SafeAreaView, StyleSheet, Text, useWindowDimensions, Vibration, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 
 import { PuzzleBoard } from '@components/PuzzleBoard';
 import { useCurrentLevel, useGameStore } from '@store/gameStore';
@@ -16,6 +17,23 @@ const SUCCESS_MP3 = 'https://www.soundjay.com/buttons/sounds/button-09.mp3';
 const FAIL_MP3 = 'https://www.soundjay.com/buttons/sounds/button-10.mp3';
 type SoundRef = { replayAsync: () => Promise<unknown>; unloadAsync: () => Promise<unknown> } | null;
 const hasNativeAV = Boolean((NativeModules as Record<string, unknown>).ExponentAV);
+const MusicIcon = () => (
+  <Svg height={34} viewBox="0 0 24 24" width={34}>
+    <Path d="M16 4v9.5a3.5 3.5 0 1 1-2-3.15V8.1l-6 1.5v6.4a3.5 3.5 0 1 1-2-3.15V7.4c0-.91.62-1.7 1.5-1.92L16 4Z" fill="#ffffff" stroke="#2b6d93" strokeWidth={1.3} />
+  </Svg>
+);
+const SpeakerIcon = () => (
+  <Svg height={34} viewBox="0 0 24 24" width={34}>
+    <Path d="M3 14h4l5 4V6L7 10H3v4Zm12.5-1.96a4 4 0 0 0 0-4.08m2.5 6.54a8 8 0 0 0 0-9" fill="none" stroke="#ffffff" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} />
+    <Path d="M3 14h4l5 4V6L7 10H3v4Z" fill="#ffffff" stroke="#2b6d93" strokeLinejoin="round" strokeWidth={1.3} />
+  </Svg>
+);
+const Toggle = ({ enabled, onPress }: { enabled: boolean; onPress: () => void }) => (
+  <Pressable onPress={onPress} style={[styles.toggle, enabled && styles.toggleOn]}>
+    <Text style={styles.toggleLabel}>{enabled ? 'ON' : 'OFF'}</Text>
+    <View style={[styles.toggleKnob, enabled && styles.toggleKnobOn]} />
+  </Pressable>
+);
 
 export const GameScreen = () => {
   const windowSize = useWindowDimensions();
@@ -38,6 +56,9 @@ export const GameScreen = () => {
   const previousStatus = useRef(gameStatus);
   const successSound = useRef<SoundRef>(null);
   const failSound = useRef<SoundRef>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [musicEnabled, setMusicEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(true);
 
   if (!level) {
     return (
@@ -76,10 +97,10 @@ export const GameScreen = () => {
     previousStatus.current = gameStatus;
     if (gameStatus === 'failed') {
       Vibration.vibrate(200);
-      failSound.current?.replayAsync().catch(() => null);
+      if (soundEnabled) failSound.current?.replayAsync().catch(() => null);
     }
-    if (gameStatus === 'completed') successSound.current?.replayAsync().catch(() => null);
-  }, [gameStatus]);
+    if (gameStatus === 'completed' && soundEnabled) successSound.current?.replayAsync().catch(() => null);
+  }, [gameStatus, soundEnabled]);
 
   const completion = `${progress.visitedEdges.length}/${level.edges.length} edges`;
   const canGoNext = progress.solved && selectedLevelIndex < unlockedLevelIndex;
@@ -92,10 +113,27 @@ export const GameScreen = () => {
   const progressHeight = Math.max(10, screenWidth * 0.03);
   const openHowToPlay = () =>
     Alert.alert('How To Play', 'Start from any node, trace connected lines once, and finish every edge without lifting your finger.');
-  const openSettings = () => Alert.alert('Settings', 'Use Reset to restart the level or Exit to go back home.');
+  const openSettings = () => setSettingsOpen(true);
 
   return (
     <SafeAreaView style={styles.container}>
+      <Modal animationType="fade" onRequestClose={() => setSettingsOpen(false)} transparent visible={settingsOpen}>
+        <Pressable onPress={() => setSettingsOpen(false)} style={styles.modalBackdrop}>
+          <Pressable onPress={() => null} style={styles.modalCard}>
+            <View style={styles.modalRow}>
+              <MusicIcon />
+              <Toggle enabled={musicEnabled} onPress={() => setMusicEnabled((value) => !value)} />
+            </View>
+            <View style={styles.modalRow}>
+              <SpeakerIcon />
+              <Toggle enabled={soundEnabled} onPress={() => setSoundEnabled((value) => !value)} />
+            </View>
+            <Pressable onPress={() => Alert.alert('Privacy Policy', 'Privacy policy screen can be added here.')} style={styles.privacyLink}>
+              <Text style={styles.privacyText}>Privacy Policy</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
       <View style={styles.header}>
         <IconButton label="?" onPress={openHowToPlay} size={iconSize} tone="gold" />
         <View style={styles.headerCenter}>
@@ -155,6 +193,16 @@ const styles = StyleSheet.create({
   boardWrap: { alignItems: 'center', justifyContent: 'center', flex: 1 },
   failedOverlay: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
   failedText: { color: '#ff4d67', fontSize: 28, fontWeight: '900', letterSpacing: 2 },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(3, 4, 18, 0.55)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  modalCard: { width: '72%', maxWidth: 320, backgroundColor: '#9dd7f3', borderColor: '#1d6f9b', borderWidth: 3, borderRadius: 20, paddingVertical: 26, paddingHorizontal: 22 },
+  modalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
+  toggle: { width: 86, height: 38, borderRadius: 22, backgroundColor: '#1f5c84', borderColor: '#ffffff', borderWidth: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10 },
+  toggleOn: { backgroundColor: '#1d5f8d' },
+  toggleLabel: { color: '#ffffff', fontSize: 18, fontWeight: '900' },
+  toggleKnob: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#8a9caf' },
+  toggleKnobOn: { backgroundColor: '#18e25d' },
+  privacyLink: { marginTop: 10, alignSelf: 'center' },
+  privacyText: { color: '#ffffff', fontSize: 16, fontWeight: '700', textShadowColor: 'rgba(0,0,0,0.2)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
   toolbar: { flexDirection: 'row', gap: 12, marginTop: 8, marginBottom: 8 },
   action: { flex: 1, alignItems: 'center', backgroundColor: '#1b1840', borderColor: '#4d4387', borderRadius: 18, borderWidth: 1 },
   actionText: { color: '#f2f5ff', fontWeight: '700' },
