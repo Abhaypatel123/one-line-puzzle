@@ -15,14 +15,18 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.onelinepuzzle.app",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#1a1a2e",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": []
     },
+    "plugins": [],
     "web": {
       "favicon": "./assets/favicon.png"
     }
