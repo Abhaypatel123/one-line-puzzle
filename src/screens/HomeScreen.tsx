@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 import { SettingsModal } from '@components/SettingsModal';
-import { LEVELS } from '@game/levelData';
+import { LevelSelectionScreen } from '@screens/LevelSelectionScreen';
 import { useGameStore } from '@store/gameStore';
 
 const PRIMARY_PINK = '#ff4ecd';
@@ -17,60 +17,66 @@ const MenuButton = ({ icon, label, onPress }: { icon: React.ReactNode; label: st
 );
 
 export const HomeScreen = () => {
-  const selectedLevelIndex = useGameStore((state) => state.selectedLevelIndex);
   const musicEnabled = useGameStore((state) => state.musicEnabled);
-  const changeSelectedLevel = useGameStore((state) => state.changeSelectedLevel);
   const toggleMusic = useGameStore((state) => state.toggleMusic);
-  const unlockedLevelIndex = useGameStore((state) => state.unlockedLevelIndex);
   const startLevel = useGameStore((state) => state.startLevel);
+  const [levelsOpen, setLevelsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const canGoBack = selectedLevelIndex > 0;
-  const canGoForward = selectedLevelIndex < unlockedLevelIndex;
+
+  if (levelsOpen) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <LevelSelectionScreen onBack={() => setLevelsOpen(false)} />
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <SettingsModal
-        musicEnabled={musicEnabled}
-        onClose={() => setSettingsOpen(false)}
-        onPrivacyPress={() => null}
-        onToggleMusic={toggleMusic}
-        onToggleSound={() => setSoundEnabled((value) => !value)}
-        soundEnabled={soundEnabled}
-        visible={settingsOpen}
-      />
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <SettingsModal
+          musicEnabled={musicEnabled}
+          onClose={() => setSettingsOpen(false)}
+          onPrivacyPress={() => null}
+          onToggleMusic={toggleMusic}
+          onToggleSound={() => setSoundEnabled((value) => !value)}
+          soundEnabled={soundEnabled}
+          visible={settingsOpen}
+        />
 
-      <View pointerEvents="none" style={styles.bgShapeOne} />
-      <View pointerEvents="none" style={styles.bgShapeTwo} />
-      <View pointerEvents="none" style={styles.bgShapeThree} />
-      <View pointerEvents="none" style={styles.bgGlow} />
+        <View pointerEvents="none" style={styles.bgShapeOne} />
+        <View pointerEvents="none" style={styles.bgShapeTwo} />
+        <View pointerEvents="none" style={styles.bgShapeThree} />
+        <View pointerEvents="none" style={styles.bgGlow} />
 
-      <View style={styles.mainContent}>
-        <View style={styles.hero}>
-          <Text style={styles.title}>ONE LINE</Text>
-          <Text style={styles.subtitle}>PUZZLE ADVENTURE</Text>
-        </View>
+        <View style={styles.mainContent}>
+          <View style={styles.hero}>
+            <Text style={styles.title}>ONE LINE</Text>
+            <Text style={styles.subtitle}>PUZZLE ADVENTURE</Text>
+          </View>
 
-        <View style={styles.playWrap}>
-          <Pressable onPress={() => startLevel()} style={styles.playButton}>
-            <View style={styles.playTriangleWrap}>
-              <Ionicons color={DEEP_PINK} name="play" size={64} style={styles.playTriangle} />
-            </View>
-            <Text style={styles.playText}>PLAY</Text>
-          </Pressable>
-        </View>
+          <View style={styles.playWrap}>
+            <Pressable onPress={() => startLevel()} style={styles.playButton}>
+              <View style={styles.playTriangleWrap}>
+                <Ionicons color={DEEP_PINK} name="play" size={64} style={styles.playTriangle} />
+              </View>
+              <Text style={styles.playText}>PLAY</Text>
+            </Pressable>
+          </View>
 
-        <View style={styles.bottomTray}>
-          <MenuButton
-            icon={<Ionicons color="#fff8f2" name="map-outline" size={30} />}
-            label="LEVELS"
-            onPress={() => changeSelectedLevel(canGoForward ? 1 : canGoBack ? -1 : 0)}
-          />
-          <MenuButton
-            icon={<MaterialCommunityIcons color="#fff8f2" name="cog" size={30} />}
-            label="SETTINGS"
-            onPress={() => setSettingsOpen(true)}
-          />
+          <View style={styles.bottomTray}>
+            <MenuButton
+              icon={<Ionicons color="#fff8f2" name="map-outline" size={30} />}
+              label="LEVELS"
+              onPress={() => setLevelsOpen(true)}
+            />
+            <MenuButton
+              icon={<MaterialCommunityIcons color="#fff8f2" name="cog" size={30} />}
+              label="SETTINGS"
+              onPress={() => setSettingsOpen(true)}
+            />
+          </View>
         </View>
       </View>
     </SafeAreaView>
@@ -78,7 +84,8 @@ export const HomeScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#05051d', paddingHorizontal: 24, paddingTop: 18, paddingBottom: 16 },
+  safeArea: { flex: 1, backgroundColor: '#05051d' },
+  container: { flex: 1, paddingHorizontal: 24, paddingTop: 18, paddingBottom: 16 },
   bgShapeOne: { position: 'absolute', top: 58, right: -10, width: 150, height: 150, borderWidth: 2, borderColor: '#1b2040', borderRadius: 30, transform: [{ rotate: '44deg' }] },
   bgShapeTwo: { position: 'absolute', top: 250, left: -52, width: 170, height: 170, borderWidth: 2, borderColor: '#22284c', borderRadius: 24, transform: [{ rotate: '35deg' }] },
   bgShapeThree: { position: 'absolute', bottom: 160, right: 8, width: 120, height: 120, borderWidth: 2, borderColor: '#171c37', borderRadius: 20, transform: [{ rotate: '16deg' }] },

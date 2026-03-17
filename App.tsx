@@ -10,9 +10,15 @@ import { useGameStore } from '@store/gameStore';
 import { musicManager } from '@utils/musicManager';
 
 export default function App() {
+  const hydrateProgress = useGameStore((state) => state.hydrateProgress);
   const musicEnabled = useGameStore((state) => state.musicEnabled);
+  const progressLoaded = useGameStore((state) => state.progressLoaded);
   const screen = useGameStore((state) => state.screen);
   const [showSplash, setShowSplash] = useState(true);
+
+  useEffect(() => {
+    hydrateProgress().catch(() => null);
+  }, [hydrateProgress]);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowSplash(false), 2200);
@@ -32,7 +38,7 @@ export default function App() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaView style={styles.safeArea}>
-        {showSplash ? <SplashScreen /> : screen === 'home' ? <HomeScreen /> : <GameScreen />}
+        {showSplash || !progressLoaded ? <SplashScreen /> : screen === 'home' ? <HomeScreen /> : <GameScreen />}
         <StatusBar style="light" />
       </SafeAreaView>
     </GestureHandlerRootView>

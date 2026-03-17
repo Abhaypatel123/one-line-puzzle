@@ -25,13 +25,17 @@ class MusicManager {
     const av = this.audio ?? (await import('expo-av').catch(() => null));
     if (!av) return null;
     this.audio = av;
-    await av.Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      shouldDuckAndroid: true,
-      staysActiveInBackground: true,
-    }).catch(() => null);
+    try {
+      await av.Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        staysActiveInBackground: false,
+      });
+    } catch (error) {
+      // Silently ignore audio mode errors (e.g., when activity is unavailable)
+    }
     const sound = new av.Audio.Sound();
-    await sound.loadAsync(BACKGROUND_SOURCE, { isLooping: true, shouldPlay: false, volume: 0.6 });
+    await sound.loadAsync(BACKGROUND_SOURCE, { isLooping: true, shouldPlay: false, volume: 0.6 }).catch(() => null);
     this.sound = sound;
     return sound;
   }
