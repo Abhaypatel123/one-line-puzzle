@@ -1,3 +1,5 @@
+import { NativeModules } from 'react-native';
+
 type SoundRef = {
   loadAsync: (source: { uri: string }, options?: { isLooping?: boolean; shouldPlay?: boolean }) => Promise<unknown>;
   playAsync: () => Promise<unknown>;
@@ -7,12 +9,18 @@ type SoundRef = {
 } | null;
 
 const BACKGROUND_SOURCE = { uri: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' };
+const hasNativeAV = Boolean((NativeModules as Record<string, unknown>).ExponentAV);
 
 class MusicManager {
   private sound: SoundRef = null;
   private audio: null | typeof import('expo-av') = null;
 
+  isAvailable() {
+    return hasNativeAV;
+  }
+
   private async ensureLoaded() {
+    if (!hasNativeAV) return null;
     if (this.sound) return this.sound;
     const av = this.audio ?? (await import('expo-av').catch(() => null));
     if (!av) return null;

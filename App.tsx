@@ -20,10 +20,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!musicManager.isAvailable()) return;
     musicManager.sync(musicEnabled).catch(() => null);
   }, [musicEnabled]);
 
   useEffect(() => () => {
+    if (!musicManager.isAvailable()) return;
     musicManager.unload().catch(() => null);
   }, []);
 

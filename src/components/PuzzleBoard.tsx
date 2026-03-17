@@ -11,6 +11,7 @@ import { GameProgress } from '@game/puzzleEngine';
 import { Point, edgeKey, findNearestNode, getNode, hasEdge } from '@utils/graphUtils';
 
 type PuzzleBoardProps = {
+  boardSize?: number;
   gameStatus: 'playing' | 'failed' | 'completed';
   hintEdge: string | null;
   level: PuzzleLevel;
@@ -20,10 +21,10 @@ type PuzzleBoardProps = {
   progress: GameProgress;
 };
 
-export const PuzzleBoard = ({ gameStatus, hintEdge, level, onEnd, onMove, onStart, progress }: PuzzleBoardProps) => {
+export const PuzzleBoard = ({ boardSize: providedBoardSize, gameStatus, hintEdge, level, onEnd, onMove, onStart, progress }: PuzzleBoardProps) => {
   const windowSize = useWindowDimensions();
   const { width, height } = Dimensions.get('window');
-  const boardSize = Math.min(windowSize.width || width, windowSize.height || height) * 0.9;
+  const boardSize = providedBoardSize ?? Math.min(windowSize.width || width, windowSize.height || height) * 0.9;
   const touchRadius = 0.06;
   const nodeOuter = Math.max(10, boardSize * 0.04);
   const nodeInner = Math.max(5, boardSize * 0.018);
