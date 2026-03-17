@@ -1,18 +1,36 @@
 import { StatusBar } from 'expo-status-bar';
+import { useEffect, useState } from 'react';
 import { SafeAreaView, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { GameScreen } from '@screens/GameScreen';
 import { HomeScreen } from '@screens/HomeScreen';
+import { SplashScreen } from '@screens/SplashScreen';
 import { useGameStore } from '@store/gameStore';
+import { musicManager } from '@utils/musicManager';
 
 export default function App() {
+  const musicEnabled = useGameStore((state) => state.musicEnabled);
   const screen = useGameStore((state) => state.screen);
+  const [showSplash, setShowSplash] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowSplash(false), 2200);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    musicManager.sync(musicEnabled).catch(() => null);
+  }, [musicEnabled]);
+
+  useEffect(() => () => {
+    musicManager.unload().catch(() => null);
+  }, []);
 
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaView style={styles.safeArea}>
-        {screen === 'home' ? <HomeScreen /> : <GameScreen />}
+        {showSplash ? <SplashScreen /> : screen === 'home' ? <HomeScreen /> : <GameScreen />}
         <StatusBar style="light" />
       </SafeAreaView>
     </GestureHandlerRootView>
@@ -20,6 +38,6 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#11131b' },
-  safeArea: { flex: 1, backgroundColor: '#11131b' },
+  root: { flex: 1, backgroundColor: '#171717' },
+  safeArea: { flex: 1, backgroundColor: '#171717' },
 });

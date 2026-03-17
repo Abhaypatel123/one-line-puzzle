@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Dimensions, Modal, NativeModules, Pressable, SafeAreaView, StyleSheet, Text, useWindowDimensions, Vibration, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Dimensions, NativeModules, Pressable, SafeAreaView, StyleSheet, Text, useWindowDimensions, Vibration, View } from 'react-native';
+import ConfettiCannon from 'react-native-confetti-cannon';
 
 import { PuzzleBoard } from '@components/PuzzleBoard';
+import { SettingsModal } from '@components/SettingsModal';
 import { useCurrentLevel, useGameStore } from '@store/gameStore';
 
 const IconButton = ({ label, onPress, size, tone }: { label: string; onPress: () => void; size: number; tone: 'gold' | 'blue' }) => (
@@ -13,27 +14,21 @@ const IconButton = ({ label, onPress, size, tone }: { label: string; onPress: ()
   </Pressable>
 );
 
+const RoundAction = ({ badge, color, label, onPress, size }: { badge?: string; color: string; label: string; onPress: () => void; size: number }) => (
+  <Pressable onPress={onPress} style={[styles.roundAction, { width: size, height: size, borderRadius: size / 2, backgroundColor: color }]}>
+    <Text style={[styles.roundIcon, { fontSize: size * 0.46 }]}>{label}</Text>
+    {badge ? (
+      <View style={styles.actionBadge}>
+        <Text style={styles.actionBadgeText}>{badge}</Text>
+      </View>
+    ) : null}
+  </Pressable>
+);
+
 const SUCCESS_MP3 = 'https://www.soundjay.com/buttons/sounds/button-09.mp3';
 const FAIL_MP3 = 'https://www.soundjay.com/buttons/sounds/button-10.mp3';
 type SoundRef = { replayAsync: () => Promise<unknown>; unloadAsync: () => Promise<unknown> } | null;
 const hasNativeAV = Boolean((NativeModules as Record<string, unknown>).ExponentAV);
-const MusicIcon = () => (
-  <Svg height={34} viewBox="0 0 24 24" width={34}>
-    <Path d="M16 4v9.5a3.5 3.5 0 1 1-2-3.15V8.1l-6 1.5v6.4a3.5 3.5 0 1 1-2-3.15V7.4c0-.91.62-1.7 1.5-1.92L16 4Z" fill="#ffffff" stroke="#2b6d93" strokeWidth={1.3} />
-  </Svg>
-);
-const SpeakerIcon = () => (
-  <Svg height={34} viewBox="0 0 24 24" width={34}>
-    <Path d="M3 14h4l5 4V6L7 10H3v4Zm12.5-1.96a4 4 0 0 0 0-4.08m2.5 6.54a8 8 0 0 0 0-9" fill="none" stroke="#ffffff" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} />
-    <Path d="M3 14h4l5 4V6L7 10H3v4Z" fill="#ffffff" stroke="#2b6d93" strokeLinejoin="round" strokeWidth={1.3} />
-  </Svg>
-);
-const Toggle = ({ enabled, onPress }: { enabled: boolean; onPress: () => void }) => (
-  <Pressable onPress={onPress} style={[styles.toggle, enabled && styles.toggleOn]}>
-    <Text style={styles.toggleLabel}>{enabled ? 'ON' : 'OFF'}</Text>
-    <View style={[styles.toggleKnob, enabled && styles.toggleKnobOn]} />
-  </Pressable>
-);
 
 export const GameScreen = () => {
   const windowSize = useWindowDimensions();
@@ -42,6 +37,7 @@ export const GameScreen = () => {
   const gameStatus = useGameStore((state) => state.gameStatus);
   const level = useCurrentLevel();
   const hintEdge = useGameStore((state) => state.hintEdge);
+  const musicEnabled = useGameStore((state) => state.musicEnabled);
   const progress = useGameStore((state) => state.progress);
   const selectedLevelIndex = useGameStore((state) => state.selectedLevelIndex);
   const unlockedLevelIndex = useGameStore((state) => state.unlockedLevelIndex);
@@ -52,18 +48,29 @@ export const GameScreen = () => {
   const touchEnd = useGameStore((state) => state.touchEnd);
   const touchMove = useGameStore((state) => state.touchMove);
   const touchStart = useGameStore((state) => state.touchStart);
-  const completeAnim = useRef(new Animated.Value(0)).current;
+  const toggleMusic = useGameStore((state) => state.toggleMusic);
   const previousStatus = useRef(gameStatus);
   const successSound = useRef<SoundRef>(null);
   const failSound = useRef<SoundRef>(null);
+  const confettiTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [musicEnabled, setMusicEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const confettiStreams = useMemo(
+    () => [
+      { x: 0.06, count: 40, speed: 3600 },
+      { x: 0.24, count: 40, speed: 3600 },
+      { x: 0.5, count: 40, speed: 3600 },
+      { x: 0.76, count: 40, speed: 3600 },
+      { x: 0.94, count: 40, speed: 3600 },
+    ],
+    []
+  );
 
   if (!level) {
     return (
       <View style={styles.container}>
-        <Text style={styles.completeText}>No level data available.</Text>
+        <Text style={styles.caption}>No level data available.</Text>
       </View>
     );
   }
@@ -83,14 +90,11 @@ export const GameScreen = () => {
     load().catch(() => null);
     return () => {
       active = false;
+      if (confettiTimer.current) clearTimeout(confettiTimer.current);
       successSound.current?.unloadAsync().catch(() => null);
       failSound.current?.unloadAsync().catch(() => null);
     };
   }, []);
-
-  useEffect(() => {
-    Animated.spring(completeAnim, { toValue: progress.solved ? 1 : 0, friction: 8, tension: 60, useNativeDriver: true }).start();
-  }, [completeAnim, progress.solved]);
 
   useEffect(() => {
     if (previousStatus.current === gameStatus) return;
@@ -99,7 +103,13 @@ export const GameScreen = () => {
       Vibration.vibrate(200);
       if (soundEnabled) failSound.current?.replayAsync().catch(() => null);
     }
-    if (gameStatus === 'completed' && soundEnabled) successSound.current?.replayAsync().catch(() => null);
+    if (gameStatus === 'completed') {
+      if (soundEnabled) successSound.current?.replayAsync().catch(() => null);
+      setShowConfetti(true);
+      if (confettiTimer.current) clearTimeout(confettiTimer.current);
+      confettiTimer.current = setTimeout(() => setShowConfetti(false), 5000);
+    }
+    if (gameStatus !== 'completed') setShowConfetti(false);
   }, [gameStatus, soundEnabled]);
 
   const completion = `${progress.visitedEdges.length}/${level.edges.length} edges`;
@@ -108,8 +118,7 @@ export const GameScreen = () => {
   const iconSize = Math.max(50, Math.min(screenWidth * 0.14, 62));
   const titleSize = Math.max(24, Math.min(screenWidth * 0.075, 34));
   const captionSize = Math.max(12, Math.min(screenWidth * 0.034, 15));
-  const actionPad = Math.max(12, screenWidth * 0.035);
-  const actionFont = Math.max(14, Math.min(screenWidth * 0.04, 18));
+  const actionSize = Math.max(58, Math.min(screenWidth * 0.16, 74));
   const progressHeight = Math.max(10, screenWidth * 0.03);
   const openHowToPlay = () =>
     Alert.alert('How To Play', 'Start from any node, trace connected lines once, and finish every edge without lifting your finger.');
@@ -117,23 +126,15 @@ export const GameScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Modal animationType="fade" onRequestClose={() => setSettingsOpen(false)} transparent visible={settingsOpen}>
-        <Pressable onPress={() => setSettingsOpen(false)} style={styles.modalBackdrop}>
-          <Pressable onPress={() => null} style={styles.modalCard}>
-            <View style={styles.modalRow}>
-              <MusicIcon />
-              <Toggle enabled={musicEnabled} onPress={() => setMusicEnabled((value) => !value)} />
-            </View>
-            <View style={styles.modalRow}>
-              <SpeakerIcon />
-              <Toggle enabled={soundEnabled} onPress={() => setSoundEnabled((value) => !value)} />
-            </View>
-            <Pressable onPress={() => Alert.alert('Privacy Policy', 'Privacy policy screen can be added here.')} style={styles.privacyLink}>
-              <Text style={styles.privacyText}>Privacy Policy</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <SettingsModal
+        musicEnabled={musicEnabled}
+        onClose={() => setSettingsOpen(false)}
+        onPrivacyPress={() => Alert.alert('Privacy Policy', 'Privacy policy screen can be added here.')}
+        onToggleMusic={toggleMusic}
+        onToggleSound={() => setSoundEnabled((value) => !value)}
+        soundEnabled={soundEnabled}
+        visible={settingsOpen}
+      />
       <View style={styles.header}>
         <IconButton label="?" onPress={openHowToPlay} size={iconSize} tone="gold" />
         <View style={styles.headerCenter}>
@@ -147,28 +148,51 @@ export const GameScreen = () => {
       </View>
       <View style={styles.boardWrap}>
         <PuzzleBoard gameStatus={gameStatus} hintEdge={hintEdge} level={level} onEnd={touchEnd} onMove={touchMove} onStart={touchStart} progress={progress} />
+        {showConfetti ? (
+          <View pointerEvents="none" style={styles.confettiLayer}>
+            {confettiStreams.map(({ count, speed, x }, index) => (
+              <ConfettiCannon
+                autoStart
+                count={count}
+                explosionSpeed={30}
+                fadeOut
+                fallSpeed={speed}
+                key={`confetti-${index}`}
+                origin={{ x: screenWidth * x, y: -24 }}
+              />
+            ))}
+          </View>
+        ) : null}
+        {gameStatus === 'completed' ? (
+          <View style={styles.completeOverlay}>
+            <View style={styles.bannerWrap}>
+              <View style={[styles.ribbonTail, styles.ribbonLeft]} />
+              <View style={styles.banner}>
+                <Text style={styles.bannerText}>CONGRATULATIONS</Text>
+              </View>
+              <View style={[styles.ribbonTail, styles.ribbonRight]} />
+            </View>
+            <View style={styles.completeActions}>
+              <Pressable onPress={resetLevel} style={styles.restartButton}>
+                <Text style={styles.restartIcon}>↻</Text>
+              </Pressable>
+              <Pressable onPress={canGoNext ? nextLevel : resetLevel} style={styles.nextButton}>
+                <Text style={styles.nextButtonText}>{canGoNext ? 'NEXT' : 'REPLAY'}</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
         {gameStatus === 'failed' ? (
           <View pointerEvents="none" style={styles.failedOverlay}>
             <Text style={styles.failedText}>FAILED</Text>
           </View>
         ) : null}
       </View>
-      <View style={styles.toolbar}>
-        <Pressable onPress={showHint} style={[styles.action, { paddingVertical: actionPad }]}><Text style={[styles.actionText, { fontSize: actionFont }]}>Hint</Text></Pressable>
-        <Pressable onPress={resetLevel} style={[styles.action, { paddingVertical: actionPad }]}><Text style={[styles.actionText, { fontSize: actionFont }]}>Reset</Text></Pressable>
-        <Pressable onPress={goHome} style={[styles.action, { paddingVertical: actionPad }]}><Text style={[styles.actionText, { fontSize: actionFont }]}>Exit</Text></Pressable>
-      </View>
-      <Animated.View
-        pointerEvents="none"
-        style={[styles.completeCard, { opacity: completeAnim, transform: [{ scale: completeAnim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }] }]}
-      >
-        <Text style={styles.completeTitle}>Level Complete</Text>
-        <Text style={styles.completeText}>Every segment was traced in a single stroke.</Text>
-      </Animated.View>
-      {progress.solved ? (
-        <Pressable onPress={canGoNext ? nextLevel : resetLevel} style={styles.nextButton}>
-          <Text style={styles.nextText}>{canGoNext ? 'Next Level' : 'Play Again'}</Text>
-        </Pressable>
+      {gameStatus !== 'completed' ? (
+        <View style={styles.bottomActions}>
+          <RoundAction badge="AD" color="#ffd44c" label="💡" onPress={showHint} size={actionSize} />
+          <RoundAction badge="AD" color="#7ee539" label="▶" onPress={canGoNext ? nextLevel : resetLevel} size={actionSize} />
+        </View>
       ) : null}
     </SafeAreaView>
   );
@@ -190,25 +214,25 @@ const styles = StyleSheet.create({
   iconText: { fontWeight: '900' },
   helpText: { color: '#7c2b17' },
   settingsText: { color: '#215a7f', textShadowColor: 'rgba(255,255,255,0.2)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
-  boardWrap: { alignItems: 'center', justifyContent: 'center', flex: 1 },
+  boardWrap: { alignItems: 'center', justifyContent: 'center', flex: 1, marginVertical: 2 },
+  confettiLayer: { ...StyleSheet.absoluteFillObject, top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' },
+  completeOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between', paddingVertical: 26, paddingHorizontal: 18 },
+  bannerWrap: { alignItems: 'center', flexDirection: 'row', justifyContent: 'center', marginTop: 6 },
+  banner: { backgroundColor: '#46e62e', borderColor: '#1fa818', borderRadius: 10, borderWidth: 3, paddingHorizontal: 18, paddingVertical: 10 },
+  bannerText: { color: '#fff', fontSize: 24, fontWeight: '900', letterSpacing: 1, textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 1, height: 2 }, textShadowRadius: 1 },
+  ribbonTail: { borderBottomWidth: 14, borderTopWidth: 14, height: 0, width: 0 },
+  ribbonLeft: { borderBottomColor: '#2dc51d', borderLeftWidth: 18, borderLeftColor: 'transparent', borderRightWidth: 18, borderRightColor: '#46e62e', borderTopColor: '#2dc51d', marginRight: -4 },
+  ribbonRight: { borderBottomColor: '#2dc51d', borderLeftWidth: 18, borderLeftColor: '#46e62e', borderRightWidth: 18, borderRightColor: 'transparent', borderTopColor: '#2dc51d', marginLeft: -4 },
+  completeActions: { alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 18, marginBottom: 10 },
+  restartButton: { width: 68, height: 68, borderRadius: 34, backgroundColor: '#58bdf5', borderColor: '#1b6f9e', borderWidth: 3, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 4 },
+  restartIcon: { color: '#fff', fontSize: 38, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
+  nextButton: { minWidth: 148, paddingHorizontal: 24, height: 68, borderRadius: 14, backgroundColor: '#77f433', borderColor: '#2f9d16', borderWidth: 3, alignItems: 'center', justifyContent: 'center', shadowColor: '#77f433', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.55, shadowRadius: 10, elevation: 5 },
+  nextButtonText: { color: '#fff', fontSize: 24, fontWeight: '900', letterSpacing: 1, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 1, height: 2 }, textShadowRadius: 1 },
   failedOverlay: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
   failedText: { color: '#ff4d67', fontSize: 28, fontWeight: '900', letterSpacing: 2 },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(3, 4, 18, 0.55)', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  modalCard: { width: '72%', maxWidth: 320, backgroundColor: '#9dd7f3', borderColor: '#1d6f9b', borderWidth: 3, borderRadius: 20, paddingVertical: 26, paddingHorizontal: 22 },
-  modalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
-  toggle: { width: 86, height: 38, borderRadius: 22, backgroundColor: '#1f5c84', borderColor: '#ffffff', borderWidth: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10 },
-  toggleOn: { backgroundColor: '#1d5f8d' },
-  toggleLabel: { color: '#ffffff', fontSize: 18, fontWeight: '900' },
-  toggleKnob: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#8a9caf' },
-  toggleKnobOn: { backgroundColor: '#18e25d' },
-  privacyLink: { marginTop: 10, alignSelf: 'center' },
-  privacyText: { color: '#ffffff', fontSize: 16, fontWeight: '700', textShadowColor: 'rgba(0,0,0,0.2)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
-  toolbar: { flexDirection: 'row', gap: 12, marginTop: 8, marginBottom: 8 },
-  action: { flex: 1, alignItems: 'center', backgroundColor: '#1b1840', borderColor: '#4d4387', borderRadius: 18, borderWidth: 1 },
-  actionText: { color: '#f2f5ff', fontWeight: '700' },
-  completeCard: { backgroundColor: '#211224', borderColor: '#ff4ecd', borderRadius: 20, borderWidth: 1, marginTop: 8, padding: 18 },
-  completeTitle: { color: '#fff', fontSize: 24, fontWeight: '800', marginBottom: 6, textAlign: 'center' },
-  completeText: { color: '#f4d7eb', fontSize: 15, textAlign: 'center' },
-  nextButton: { alignItems: 'center', backgroundColor: '#ff4ecd', borderRadius: 18, marginTop: 12, paddingVertical: 16 },
-  nextText: { color: '#140914', fontSize: 16, fontWeight: '800' },
+  bottomActions: { flexDirection: 'row', justifyContent: 'center', gap: 28, marginTop: 6, marginBottom: 8 },
+  roundAction: { alignItems: 'center', borderColor: '#4d2e00', borderWidth: 2, elevation: 4, justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 6 },
+  roundIcon: { color: '#fff', fontWeight: '900' },
+  actionBadge: { position: 'absolute', right: -3, top: -3, minWidth: 22, height: 22, borderRadius: 11, backgroundColor: '#ff4b53', borderWidth: 2, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  actionBadgeText: { color: '#fff', fontSize: 9, fontWeight: '900' },
 });

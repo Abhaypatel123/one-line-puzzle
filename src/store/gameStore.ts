@@ -19,6 +19,7 @@ const scheduleFailReset = (reset: () => void) => {
 type GameState = {
   gameStatus: GameStatus;
   hintEdge: string | null;
+  musicEnabled: boolean;
   progress: ReturnType<typeof createProgress>;
   screen: Screen;
   selectedLevelIndex: number;
@@ -32,6 +33,7 @@ type GameState = {
   touchEnd: () => void;
   touchMove: (point: Point) => void;
   touchStart: (point: Point) => void;
+  toggleMusic: () => void;
 };
 
 const getLevel = (index: number) => LEVELS[Math.max(0, Math.min(index, LEVELS.length - 1))] ?? LEVELS[0];
@@ -39,6 +41,7 @@ const getLevel = (index: number) => LEVELS[Math.max(0, Math.min(index, LEVELS.le
 export const useGameStore = create<GameState>((set, get) => ({
   gameStatus: 'playing',
   hintEdge: null,
+  musicEnabled: true,
   progress: createProgress(),
   screen: 'home',
   selectedLevelIndex: 0,
@@ -76,6 +79,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       progress: resetProgress(),
     }));
   },
+  toggleMusic: () => set((state) => ({ musicEnabled: !state.musicEnabled })),
   touchEnd: () =>
     set((state) => {
       if (state.gameStatus !== 'playing') return state;
